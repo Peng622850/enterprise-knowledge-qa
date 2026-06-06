@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>企业知识库问答系统</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f6fa; color: #333; }
+
+    .container { max-width: 900px; margin: 0 auto; padding: 24px; }
+
+    header { text-align: center; padding: 32px 0 24px; }
+    header h1 { font-size: 24px; font-weight: 600; color: #1a1a2e; }
+    header p { font-size: 14px; color: #888; margin-top: 6px; }
+
+    .card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+    .card h2 { font-size: 15px; font-weight: 600; margin-bottom: 14px; color: #444; }
+
+    /* 上传区域 */
+    .upload-area { border: 2px dashed #d0d7e3; border-radius: 8px; padding: 28px; text-align: center; cursor: pointer; transition: border-color .2s; }
+    .upload-area:hover { border-color: #4f8ef7; }
+    .upload-area input { display: none; }
+    .upload-area p { color: #aaa; font-size: 14px; margin-top: 8px; }
+    .upload-btn { display: inline-block; margin-top: 12px; padding: 8px 20px; background: #4f8ef7; color: #fff; border-radius: 6px; font-size: 14px; cursor: pointer; border: none; }
+    .upload-btn:hover { background: #3a7de0; }
+    .upload-status { margin-top: 10px; font-size: 13px; color: #555; min-height: 20px; }
+
+    /* 对话区域 */
+    .chat-box { height: 380px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; padding: 16px; background: #fafbfc; margin-bottom: 14px; display: flex; flex-direction: column; gap: 12px; }
+
+    .msg { display: flex; gap: 10px; align-items: flex-start; }
+    .msg.user { flex-direction: row-reverse; }
+
+    .avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex-shrink: 0; }
+    .avatar.ai { background: #e8f0fe; color: #4f8ef7; }
+    .avatar.user { background: #e6f9f0; color: #2ecc71; }
+
+    .bubble { max-width: 75%; padding: 10px 14px; border-radius: 10px; font-size: 14px; line-height: 1.7; }
+    .msg.ai .bubble { background: #fff; border: 1px solid #eee; color: #333; }
+    .msg.user .bubble { background: #4f8ef7; color: #fff; }
+
+    .input-row { display: flex; gap: 10px; }
+    .input-row input { flex: 1; padding: 10px 14px; border: 1px solid #dde1ea; border-radius: 8px; font-size: 14px; outline: none; transition: border-color .2s; }
+    .input-row input:focus { border-color: #4f8ef7; }
+    .input-row button { padding: 10px 22px; background: #4f8ef7; color: #fff; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; }
+    .input-row button:hover { background: #3a7de0; }
+    .input-row button:disabled { background: #b0c4f7; cursor: not-allowed; }
+
+    .thinking { color: #aaa; font-size: 13px; font-style: italic; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>📚 企业知识库问答系统</h1>
+    <p>上传文档，智能问答，基于 RAG + Agent 架构</p>
+  </header>
+
+  <!-- 文件上传 -->
+  <div class="card">
+    <h2>📁 上传文档</h2>
+    <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+  <div style="font-size:36px">📄</div>
+  <p>支持 PDF、Word、TXT 格式</p>
+  <select id="categorySelect" onclick="event.stopPropagation()" style="margin-bottom:10px; padding:6px 10px; border:1px solid #dde1ea; border-radius:6px; font-size:14px; width:80%">
+    <option value="通用">通用</option>
+    <option value="人事政策">人事政策</option>
+    <option value="法律法规">法律法规</option>
+    <option value="财务制度">财务制度</option>
+    <option value="技术文档">技术文档</option>
+  </select>
+  <input type="file" id="fileInput" accept=".pdf,.docx,.txt" onchange="uploadFile(this)">
+  <button class="upload-btn" onclick="event.stopPropagation()">选择文件</button>
+</div>
+    <div class="upload-status" id="uploadStatus"></div>
+  </div>
+
+  <!-- 问答对话 -->
+  <div class="card">
+    <h2>💬 智能问答</h2>
+    <div class="chat-box" id="chatBox">
+      <div class="msg ai">
+        <div class="avatar ai">AI</div>
+        <div class="bubble">你好！请先上传文档，然后就可以向我提问了。我会根据知识库内容为你解答。</div>
+      </div>
+    </div>
+    <div class="input-row">
+      <input type="text" id="questionInput" placeholder="输入问题，按 Enter 发送..." onkeydown="if(event.key==='Enter') sendQuestion()">
+      <button id="sendBtn" onclick="sendQuestion()">发送</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  async function uploadFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const status = document.getElementById('uploadStatus');
+    status.textContent = `正在上传 ${file.name}...`;
+
+    const formData = new FormData();
+    formData.append('file', file);
+    const category = document.getElementById('categorySelect').value;
+    formData.append('category', category);
+
+    try {
+        const res = await fetch('/upload', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.error) {
+            status.textContent = `❌ ${data.error}`;
+        } else {
+            status.textContent = `✅ ${data.message}，分类：${data.category}，共切分 ${data.chunks} 个片段`;
+        }
+    } catch (e) {
+        status.textContent = '❌ 上传失败，请检查服务是否启动';
+    }
+}
+
+async function sendQuestion() {
+    const input = document.getElementById('questionInput');
+    const question = input.value.trim();
+    if (!question) return;
+
+    const btn = document.getElementById('sendBtn');
+    btn.disabled = true;
+    input.value = '';
+
+    appendMsg('user', question);
+    const aiDiv = appendMsg('ai', '');
+    const bubble = aiDiv.querySelector('.bubble');
+
+    try {
+        const res = await fetch('/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question, session_id: 'default' })
+        });
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let full = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const text = decoder.decode(value);
+            full += text;
+            bubble.textContent = full;
+            document.getElementById('chatBox').scrollTop =
+                document.getElementById('chatBox').scrollHeight;
+        }
+
+        if (!full) bubble.textContent = '未获取到回答，请重试';
+
+    } catch (e) {
+        bubble.textContent = '请求失败，请检查服务是否启动';
+    }
+
+    btn.disabled = false;
+    input.focus();
+}
+
+function appendMsg(role, text, thinking = false) {
+    const chatBox = document.getElementById('chatBox');
+    const div = document.createElement('div');
+    div.className = `msg ${role === 'user' ? 'user' : 'ai'}`;
+    div.innerHTML = `
+        <div class="avatar ${role === 'user' ? 'user' : 'ai'}">${role === 'user' ? '我' : 'AI'}</div>
+        <div class="bubble ${thinking ? 'thinking' : ''}">${text}</div>
+    `;
+    chatBox.appendChild(div);
+    chatBox.scrollTop = chatBox.scrollHeight;
+    return div;
+}
+</script>
+</body>
+</html>
