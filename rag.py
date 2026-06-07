@@ -46,7 +46,8 @@ def save_bm25_data(chunks: list[str], metadata: dict = None):
     for chunk in chunks:
         existing.append({
             "text": chunk,
-            "category": metadata.get("category", "通用") if metadata else "通用"
+            "category": metadata.get("category", "通用") if metadata else "通用",
+            "source": metadata.get("source", "未知") if metadata else "未知"
         })
     with open(BM25_PATH, "w", encoding="utf-8") as f:
         json.dump(existing, f, ensure_ascii=False)
@@ -167,3 +168,29 @@ def search(query: str, top_k: int = 3, category: str = None) -> list[str]:
     logger.info(f"Rerank Top-{top_k}：{[(r[:15], round(float(s), 3)) for r, s in ranked[:top_k]]}")
 
     return [text for text, _ in ranked[:top_k]]
+
+
+def delete_document(source: str) -> int:
+    """按来源文件名删除所有相关chunk"""
+    vectorstore = get_vectorstore()
+    results = vectorstore.get(where={"source": source})
+    if not results["ids"]:
+        return 0
+    vectorstore.delete(ids=results["ids"])
+
+    # 同步清理 BM25 数据
+    data = load_bm25_data()
+    filtered = [d for d in data if d.get("source") != source]
+    with open(BM25_PATH, "w", encoding="utf-8") as f:
+        json.dump(filtered, f, ensure_ascii=False)
+
+    logger.info(f"删除文档：{source}，共 {len(results['ids'])} 个chunk")
+    return len(results["ids"])
+
+
+def update_document(source: str, new_text: str, metadata: dict = None) -> int:
+    """更新文档：先删除旧的，再写入新的"""
+    delete_document(source)
+    if metadata is None:
+        metadata = {"source": source, "category": "通用"}
+    return add_documents(texts=[new_text], metadatas=[metadata])
