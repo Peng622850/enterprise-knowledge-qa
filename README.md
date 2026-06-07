@@ -1,24 +1,25 @@
 # 企业知识库智能问答系统
 
-基于 RAG + Agent 架构的企业级知识库问答系统，支持多格式文档上传、智能检索、联网搜索兜底，具备完整的工程化优化措施。
+基于 RAG + Agent 架构的企业级知识库问答系统，支持多格式文档上传、智能检索、联网搜索兜底、对话写入知识库、持久化记忆，具备完整的工程化优化措施和评测模块。
 
 ## 项目演示
 
-上传企业内部文档（PDF / Word / TXT），系统自动解析、切块、向量化存储，用户通过自然语言提问，Agent 自动决策检索策略并给出准确回答。
+上传企业内部文档（PDF / Word / TXT），系统自动解析、切块、向量化存储，用户通过自然语言提问，Agent 自动决策检索策略并给出准确回答。支持多轮对话记忆，重启服务后记忆不丢失。
 
 ## 技术架构
 
 ```
 用户提问
     ↓
-LangGraph ReAct Agent
+LangGraph ReAct Agent（持久化对话记忆）
     ├── search_knowledge_base（知识库检索）
     │       ├── MultiQuery 改写（3路召回）
     │       ├── 向量检索（ChromaDB）
     │       ├── BM25 关键词检索
     │       ├── RRF 融合排序
     │       └── Rerank 精排（bge-reranker-base）
-    └── search_web（Tavily 联网搜索兜底）
+    ├── search_web（Tavily 联网搜索兜底）
+    └── add_to_knowledge_base（对话写入知识库）
     ↓
 流式输出回答
 ```
@@ -35,6 +36,7 @@ LangGraph ReAct Agent
 | Rerank 模型 | BAAI/bge-reranker-base |
 | 关键词检索 | BM25（rank-bm25） |
 | 联网搜索 | Tavily Search API |
+| 对话持久化 | SQLite |
 | 文件解析 | pypdf + python-docx |
 
 ## RAG 工程化优化
@@ -51,19 +53,31 @@ LangGraph ReAct Agent
 
 ## Agent 工程化设计
 
-- **工具决策**：Agent 自动判断使用知识库检索还是联网搜索，知识库优先，无结果时联网兜底。
-- **多轮对话记忆**：基于 LangGraph MemorySaver 实现会话级记忆，支持上下文连续对话。
+- **三工具决策**：Agent 自动判断使用知识库检索、联网搜索还是写入知识库，知识库优先，无结果时联网兜底。
+- **对话写入知识库**：用户通过自然语言即可将内容存入知识库，Agent 自动调用工具完成写入。
+- **文档管理**：支持按来源删除、更新文档，向量库和 BM25 数据同步清理。
+- **持久化对话记忆**：基于 SQLite 存储对话历史，服务重启后记忆不丢失，支持多 session 隔离。
 - **流式输出**：Token 级别流式输出，用户无需等待全部生成完成即可看到回答。
-- **迭代次数限制**：防止 Agent 陷入死循环，最大迭代次数可配置。
+
+## 评测模块
+
+基于 LLM-as-Judge 方案，用 DeepSeek 作为评判模型，从三个维度对系统回答打分：
+
+- **相关性**：答案是否直接回答了问题
+- **忠实度**：答案是否完全基于知识库内容，没有编造
+- **完整性**：答案是否完整，没有遗漏重要信息
+
+调用 `/evaluate` 接口即可对任意问答进行批量评测，返回各维度平均分和详细评语。
 
 ## 项目结构
 
 ```
 knowledge_qa/
 ├── main.py           # FastAPI 接口层
-├── agent.py          # LangGraph Agent 定义
-├── rag.py            # RAG 核心逻辑（检索、向量化、BM25）
+├── agent.py          # LangGraph Agent 定义 + 对话历史管理
+├── rag.py            # RAG 核心逻辑（检索、向量化、BM25、文档管理）
 ├── file_parser.py    # 文件解析（PDF / Word / TXT）
+├── evaluator.py      # LLM-as-Judge 评测模块
 ├── static/
 │   └── index.html    # 前端页面
 ├── .env              # 环境变量（不提交）
@@ -75,8 +89,8 @@ knowledge_qa/
 **1. 克隆项目**
 
 ```bash
-git clone https://github.com/Peng622850/knowledge-qa.git
-cd knowledge-qa
+git clone https://github.com/Peng622850/enterprise-knowledge-qa.git
+cd enterprise-knowledge-qa
 ```
 
 **2. 安装依赖**
@@ -112,7 +126,10 @@ uvicorn main:app --reload
 | GET | `/health` | 健康检查 |
 | POST | `/upload` | 上传文件（支持分类标签） |
 | POST | `/add` | 手动写入文本 |
+| POST | `/delete` | 按来源删除文档 |
+| POST | `/update` | 更新文档内容 |
 | POST | `/chat` | 智能问答（流式输出） |
+| POST | `/evaluate` | LLM-as-Judge 评测 |
 
 ## 环境要求
 
