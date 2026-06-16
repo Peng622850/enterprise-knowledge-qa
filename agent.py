@@ -10,7 +10,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.prebuilt import create_react_agent
 from tavily import TavilyClient
 
-from rag import search, add_documents
+from rag import search, add_documents, llm_client
 
 load_dotenv()
 
@@ -77,9 +77,31 @@ def search_knowledge_base(query: str) -> str:
     在企业知识库中搜索相关信息。
     当用户询问公司内部政策、规章制度、上传文档中的内容时使用此工具。
     """
-    results = search(query)
+    # 内部自动判断分类，不依赖Agent决策
+    classify_prompt = f"""判断以下问题最匹配哪个分类，只输出分类名称，不要解释。
+
+可选分类：人事政策、法律法规、财务制度、技术文档、通用
+
+问题：{query}"""
+
+    classify_resp = llm_client.chat.completions.create(
+        model="deepseek-chat",
+        messages=[{"role": "user", "content": classify_prompt}],
+        temperature=0,
+    )
+    category = classify_resp.choices[0].message.content.strip()
+    logger.info(f"自动分类结果：{category}")
+
+    results = search(query, category=category)
+
+    # 如果分类检索没结果，fallback到全库搜索
+    if not results:
+        logger.info(f"分类检索无结果，fallback到全库搜索")
+        results = search(query)
+
     if not results:
         return "知识库中未找到相关信息。"
+
     return "\n---\n".join(results)
 
 
@@ -120,16 +142,15 @@ def add_to_knowledge_base(content: str, category: str = "通用") -> str:
         return f"写入失败：{str(e)}"
 
 
-system_prompt = """你是企业知识库助手，同时具备联网搜索和知识库写入能力。
+system_prompt = """你是企业知识库助手，具备知识库检索、联网搜索和知识库写入能力。
 
 回答规则：
-1. 如果问题涉及用户自己的个人信息（姓名、部门等），直接从对话历史中回答，不要查知识库
+1. 如果问题涉及用户个人信息，直接从对话历史回答
 2. 其他问题先使用 search_knowledge_base 查询知识库
 3. 知识库有答案 → 直接回答，注明内容来自知识库
 4. 知识库没有答案 → 使用 search_web 联网搜索
 5. 用户明确要求保存内容 → 使用 add_to_knowledge_base 写入知识库
-6. 两者都没有 → 如实告知用户
-7. 不要编造内容，回答简洁准确，使用中文"""
+6. 不要编造内容，回答简洁准确，使用中文"""
 
 memory = InMemorySaver()
 

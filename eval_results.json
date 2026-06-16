@@ -1,0 +1,270 @@
+{
+  "summary": {
+    "vector_only": {
+      "avg_relevancy": 4.6,
+      "avg_faithfulness": 5.0,
+      "avg_completeness": 3.8,
+      "avg_total": 4.47
+    },
+    "hybrid": {
+      "avg_relevancy": 4.6,
+      "avg_faithfulness": 5.0,
+      "avg_completeness": 4.0,
+      "avg_total": 4.53
+    },
+    "full_pipeline": {
+      "avg_relevancy": 4.7,
+      "avg_faithfulness": 4.9,
+      "avg_completeness": 4.1,
+      "avg_total": 4.57
+    }
+  },
+  "details": {
+    "vector_only": [
+      {
+        "question": "Python中list和tuple的区别是什么？",
+        "contexts_count": 3,
+        "relevancy": 5,
+        "faithfulness": 5,
+        "completeness": 4,
+        "comment": "答案直接针对问题，完全基于知识库内容，准确列出了可变性、内存特性和使用场景三个核心区别，但未提及知识库中关于深浅拷贝与元组内部可变对象的相关补充信息，完整性略有不足。"
+      },
+      {
+        "question": "如何使用装饰器？",
+        "contexts_count": 3,
+        "relevancy": 5,
+        "faithfulness": 5,
+        "completeness": 4,
+        "comment": "答案直接回答了如何使用装饰器，完全基于知识库内容，涵盖了基本用法、*args/**kwargs传递参数以及带参数装饰器的工厂函数模式，但未提及functools.wraps等常见最佳实践，完整性略有不足。"
+      },
+      {
+        "question": "什么是GIL，它对多线程有什么影响？",
+        "contexts_count": 3,
+        "relevancy": 5,
+        "faithfulness": 5,
+        "completeness": 4,
+        "comment": "答案直接回答了GIL的定义及其对多线程的影响，完全基于知识库内容，没有编造。但未提及知识库中关于多进程、asyncio等替代方案的对比信息，完整性略有不足。"
+      },
+      {
+        "question": "Python的垃圾回收机制是怎样的？",
+        "contexts_count": 1,
+        "relevancy": 5,
+        "faithfulness": 5,
+        "completeness": 5,
+        "comment": "答案直接、准确地回答了问题，完全基于知识库内容，没有编造或遗漏，结构清晰，覆盖了引用计数、循环垃圾回收器和分代策略三个核心要点。"
+      },
+      {
+        "question": "生成器和迭代器的区别是什么？",
+        "contexts_count": 3,
+        "relevancy": 3,
+        "faithfulness": 5,
+        "completeness": 2,
+        "comment": "答案准确基于知识库，但知识库缺少迭代器的定义，导致无法完整回答两者的区别，相关性部分受限。"
+      },
+      {
+        "question": "如何处理Python中的异常？",
+        "contexts_count": 3,
+        "relevancy": 4,
+        "faithfulness": 5,
+        "completeness": 3,
+        "comment": "答案直接针对异常处理，忠实于知识库内容，但仅聚焦于上下文管理器中的异常处理，未涵盖Python中更通用的try/except/finally等基础异常处理方式，完整性略有不足。"
+      },
+      {
+        "question": "什么是上下文管理器，如何自定义？",
+        "contexts_count": 3,
+        "relevancy": 4,
+        "faithfulness": 5,
+        "completeness": 3,
+        "comment": "答案直接回答了上下文管理器的定义和用途，忠实于知识库内容，但自定义部分仅提及@contextmanager和异常处理，缺少完整的自定义步骤或代码示例，完整性略有不足。"
+      },
+      {
+        "question": "深拷贝和浅拷贝的区别？",
+        "contexts_count": 3,
+        "relevancy": 5,
+        "faithfulness": 5,
+        "completeness": 5,
+        "comment": "答案直接针对问题，完全基于知识库内容，准确解释了深拷贝与浅拷贝的定义、区别、示例及使用场景，无遗漏。"
+      },
+      {
+        "question": "Python中的*args和**kwargs有什么用？",
+        "contexts_count": 3,
+        "relevancy": 5,
+        "faithfulness": 5,
+        "completeness": 4,
+        "comment": "答案直接回答了问题，完全基于知识库内容，但未提及*args和**kwargs在装饰器之外的其他常见用途（如函数定义时收集额外参数的具体例子），完整性略有不足。"
+      },
+      {
+        "question": "如何使用asyncio实现异步编程？",
+        "contexts_count": 3,
+        "relevancy": 5,
+        "faithfulness": 5,
+        "completeness": 4,
+        "comment": "答案直接针对问题，完全基于知识库内容，步骤清晰，但未提及知识库中关于GIL和多线程对比的总结性信息，完整性略有不足。"
+      }
+    ],
+    "hybrid": [
+      {
+        "question": "Python中list和tuple的区别是什么？",
+        "contexts_count": 3,
+        "relevancy": 5,
+        "faithfulness": 5,
+        "completeness": 4,
+        "comment": "答案直接回答了问题，完全基于知识库内容，没有编造，但未提及元组可哈希、可作为字典键等细节，完整性略有不足。"
+      },
+      {
+        "question": "如何使用装饰器？",
+        "contexts_count": 3,
+        "relevancy": 5,
+        "faithfulness": 5,
+        "completeness": 5,
+        "comment": "答案直接针对问题，完整且准确地基于知识库内容，涵盖了装饰器的定义、语法糖使用、*args/**kwargs处理任意参数以及带参数装饰器的工厂模式，无遗漏或编造。"
+      },
+      {
+        "question": "什么是GIL，它对多线程有什么影响？",
+        "contexts_count": 3,
+        "relevancy": 5,
+        "faithfulness": 5,
+        "completeness": 4,
+        "comment": "答案直接回答了GIL的定义及其对多线程的影响，完全基于知识库内容，没有编造。但未提及知识库中关于多进程、asyncio等替代方案的对比信息，完整性略有不足。"
+      },
+      {
+        "question": "Python的垃圾回收机制是怎样的？",
+        "contexts_count": 3,
+        "relevancy": 5,
+        "faithfulness": 5,
+        "completeness": 5,
+        "comment": "答案直接针对问题，完全基于知识库内容，准确涵盖了引用计数、分代回收、循环引用处理及gc模块使用，无遗漏或编造。"
+      },
+      {
+        "question": "生成器和迭代器的区别是什么？",
+        "contexts_count": 3,
+        "relevancy": 3,
+        "faithfulness": 5,
+        "completeness": 2,
+        "comment": "答案部分相关，正确描述了生成器，但未回答两者区别，且知识库确实缺少迭代器定义，因此忠实度高但完整性不足。"
+      },
+      {
+        "question": "如何处理Python中的异常？",
+        "contexts_count": 3,
+        "relevancy": 4,
+        "faithfulness": 5,
+        "completeness": 3,
+        "comment": "答案直接针对异常处理，忠实基于知识库，但未涵盖知识库中关于生成器与上下文管理器协同的优雅性描述，完整性略有不足。"
+      },
+      {
+        "question": "什么是上下文管理器，如何自定义？",
+        "contexts_count": 3,
+        "relevancy": 4,
+        "faithfulness": 5,
+        "completeness": 3,
+        "comment": "答案准确回答了上下文管理器的定义和自定义方法，完全基于知识库，但缺少自定义的完整代码示例，完整性略有不足。"
+      },
+      {
+        "question": "深拷贝和浅拷贝的区别？",
+        "contexts_count": 3,
+        "relevancy": 5,
+        "faithfulness": 5,
+        "completeness": 5,
+        "comment": "答案直接针对问题，完全基于知识库内容，准确解释了深拷贝与浅拷贝的定义、区别、示例及适用场景，无遗漏。"
+      },
+      {
+        "question": "Python中的*args和**kwargs有什么用？",
+        "contexts_count": 3,
+        "relevancy": 5,
+        "faithfulness": 5,
+        "completeness": 4,
+        "comment": "答案直接回答了问题，完全基于知识库内容，没有编造。但知识库中主要侧重装饰器场景，对*args和**kwargs在普通函数定义中的通用用途（如子类继承、多重分发）提及较少，完整性略有不足。"
+      },
+      {
+        "question": "如何使用asyncio实现异步编程？",
+        "contexts_count": 3,
+        "relevancy": 5,
+        "faithfulness": 5,
+        "completeness": 5,
+        "comment": "答案直接回答了如何使用asyncio实现异步编程，步骤清晰，完全基于知识库内容，没有编造，且涵盖了定义协程、使用await、并发调度和运行事件循环等关键信息，完整性高。"
+      }
+    ],
+    "full_pipeline": [
+      {
+        "question": "Python中list和tuple的区别是什么？",
+        "contexts_count": 3,
+        "relevancy": 5,
+        "faithfulness": 5,
+        "completeness": 4,
+        "comment": "答案直接针对问题，完全基于知识库内容，准确列出了可变性、内存特性和使用场景三个关键区别，但未提及深浅拷贝与list/tuple的关联，略有遗漏。"
+      },
+      {
+        "question": "如何使用装饰器？",
+        "contexts_count": 3,
+        "relevancy": 5,
+        "faithfulness": 4,
+        "completeness": 4,
+        "comment": "答案直接回答了问题，内容基本基于知识库，但提到了知识库未明确说明的functools.wraps用法，略有超出；完整性较好，但未提及知识库中关于上下文管理器的部分（虽与问题无关），整体评分合理。"
+      },
+      {
+        "question": "什么是GIL，它对多线程有什么影响？",
+        "contexts_count": 3,
+        "relevancy": 5,
+        "faithfulness": 5,
+        "completeness": 4,
+        "comment": "答案直接回答了GIL的定义及其对多线程的影响，完全基于知识库内容，没有编造。但未提及知识库中关于多进程、C扩展以及asyncio的对比信息，完整性略有不足。"
+      },
+      {
+        "question": "Python的垃圾回收机制是怎样的？",
+        "contexts_count": 3,
+        "relevancy": 5,
+        "faithfulness": 5,
+        "completeness": 5,
+        "comment": "答案直接针对问题，完全基于知识库内容，准确涵盖了引用计数、分代回收、循环引用处理及gc模块使用，无遗漏或编造。"
+      },
+      {
+        "question": "生成器和迭代器的区别是什么？",
+        "contexts_count": 3,
+        "relevancy": 3,
+        "faithfulness": 5,
+        "completeness": 2,
+        "comment": "答案准确基于知识库，但知识库未包含迭代器的定义及与生成器的对比，导致未能完整回答问题。"
+      },
+      {
+        "question": "如何处理Python中的异常？",
+        "contexts_count": 3,
+        "relevancy": 4,
+        "faithfulness": 5,
+        "completeness": 3,
+        "comment": "答案直接针对异常处理，但问题更通用，回答偏重于上下文管理器中的异常处理，未涵盖try/except/finally等基础异常处理方式，完整性略有不足。"
+      },
+      {
+        "question": "什么是上下文管理器，如何自定义？",
+        "contexts_count": 3,
+        "relevancy": 5,
+        "faithfulness": 5,
+        "completeness": 5,
+        "comment": "答案直接回答了问题，完全基于知识库内容，没有编造，且全面覆盖了上下文管理器的定义、作用、两种自定义方式及示例，信息完整。"
+      },
+      {
+        "question": "深拷贝和浅拷贝的区别？",
+        "contexts_count": 3,
+        "relevancy": 5,
+        "faithfulness": 5,
+        "completeness": 5,
+        "comment": "答案直接针对问题，完全基于知识库内容，准确解释了深拷贝与浅拷贝的定义、区别、示例及注意事项，未遗漏重要信息。"
+      },
+      {
+        "question": "Python中的*args和**kwargs有什么用？",
+        "contexts_count": 3,
+        "relevancy": 5,
+        "faithfulness": 5,
+        "completeness": 4,
+        "comment": "答案直接回答了问题，完全基于知识库内容，但未提及*args和**kwargs在装饰器参数化时的具体用法（如@retry(times=3)），完整性略有不足。"
+      },
+      {
+        "question": "如何使用asyncio实现异步编程？",
+        "contexts_count": 3,
+        "relevancy": 5,
+        "faithfulness": 5,
+        "completeness": 5,
+        "comment": "答案直接针对问题给出了清晰的步骤和代码示例，完全基于知识库内容，没有编造，且涵盖了定义协程、创建任务、并发执行和运行事件循环等关键要点，完整性高。"
+      }
+    ]
+  }
+}

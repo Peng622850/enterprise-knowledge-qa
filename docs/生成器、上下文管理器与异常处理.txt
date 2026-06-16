@@ -1,0 +1,26 @@
+生成器（Generator）是一种惰性求值的迭代器，通过 yield 关键字定义。它不会一次性生成所有结果，而是在每次迭代时现场计算一个值，极大节省内存。生成器函数在遇到 yield 时挂起状态，下次 next() 时恢复执行。生成器表达式（如 (x*x for x in range(10))）也提供了简洁语法。
+
+上下文管理器（Context Manager）用于管理资源，确保无论是否发生异常，资源都能正确释放。它通过 __enter__ 和 __exit__ 方法实现，由 with 语句触发。__exit__ 接收异常类型、值和回溯信息，可以处理或抑制异常。文件处理是最典型的例子：
+
+python
+with open("data.txt") as f:
+    content = f.read()
+# 离开 with 块时文件自动关闭，即使发生异常也能保证
+Python 的 contextlib.contextmanager 装饰器可以将一个生成器函数转换为上下文管理器，这使得资源控制逻辑可以用直观的顺序代码表达。生成器中，yield 之前的代码相当于 __enter__，之后的代码相当于 __exit__，且 yield 会暂停并让出控制权。结合 try/finally，可以实现异常安全的资源管理：
+
+python
+from contextlib import contextmanager
+
+@contextmanager
+def managed_file(name):
+    f = open(name, 'w')
+    try:
+        yield f          # 将资源交给 with 语句内部
+    finally:
+        f.close()        # 确保无论如何都关闭
+
+with managed_file("test.txt") as f:
+    f.write("Hello")
+异常处理贯穿整个过程。若 with 块内抛出异常，它会被 yield 向上传播。在 @contextmanager 的场景中，你可以用 try/except 包裹 yield，处理特定异常并通过 except 块决定是否吞掉异常。若 except 不重新 raise，__exit__ 将返回 True，从而抑制异常，让程序继续执行。
+
+生成器、上下文管理器和异常处理的结合，体现了 Python 优雅的资源管理模式：生成器保存状态，上下文管理器保证清理，异常处理提供健壮性。三者协同，能写出简洁且可靠的代码。

@@ -1,0 +1,25 @@
+装饰器与 *args / **kwargs
+装饰器（Decorator）是 Python 中实现横切关注点的强力工具。其本质是一个接受函数作为参数并返回新函数的高阶函数。通过闭包，装饰器可以在不修改原函数代码的前提下，为其增加日志、计时、权限校验等功能。
+
+通用装饰器需要能够装饰任意签名的函数，这正是 *args 和 **kwargs 大显身手的地方。在装饰器内部定义的包装函数中，使用 *args 收集所有位置参数为元组，**kwargs 收集所有关键字参数为字典，然后在调用原函数时通过 f(*args, **kwargs) 解包传递。这样无论被装饰函数接受什么参数，装饰器都能正常工作。
+
+python
+import functools
+import time
+
+def timer(func):
+    @functools.wraps(func)          # 保留原函数信息
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        result = func(*args, **kwargs)
+        cost = time.time() - start
+        print(f"{func.__name__} 执行耗时 {cost:.4f}s")
+        return result
+    return wrapper
+
+@timer
+def compute(n, base=2):
+    return sum(base ** i for i in range(n))
+上例中，@timer 是语法糖，等价于 compute = timer(compute)。*args 和 **kwargs 让 wrapper 可以接受任意参数并原样传递给 compute。如果装饰器本身需要参数（如 @retry(times=3)），则需再套一层工厂函数，该工厂接收配置参数并返回真正的装饰器。此时 *args 和 **kwargs 依然被用于内层包装器，确保参数传递的透明性。
+
+*args 和 **kwargs 不仅用于装饰器，在函数定义时也是收集额外参数的标准写法，在子类继承、多重分发等场景中非常实用。理解它们的“收集”与“解包”双重角色，能让你写出更灵活、可复用的代码。
