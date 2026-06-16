@@ -144,16 +144,14 @@ agent = create_react_agent(
 def run_agent(question: str, session_id: str = "default") -> str:
     logger.info(f"用户提问：{question}")
 
-    history = load_history(session_id)
-    messages = history + [HumanMessage(content=question)]
-
     config = {"configurable": {"thread_id": session_id}}
     result = agent.invoke(
-        {"messages": messages},
+        {"messages": [HumanMessage(content=question)]},   # 只传当前问题
         config=config,
     )
     answer = result["messages"][-1].content
 
+    # SQLite 仅做持久化存档，不再参与 LangGraph 输入
     save_message(session_id, "user", question)
     save_message(session_id, "assistant", answer)
 

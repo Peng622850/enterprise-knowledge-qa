@@ -2,6 +2,7 @@ import json
 import logging
 import os
 
+import jieba
 from dotenv import load_dotenv
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -27,6 +28,22 @@ llm_client = OpenAI(
     base_url="https://api.deepseek.com",
 )
 
+# ── BM25 内存缓存 ──────────────────────────────────────────
+_bm25_cache: list[dict] = []   # 全量数据，启动时加载一次
+
+def _load_cache_from_disk():
+    """启动时调用一次，把磁盘数据读进内存。"""
+    global _bm25_cache
+    if os.path.exists(BM25_PATH):
+        with open(BM25_PATH, "r", encoding="utf-8") as f:
+            _bm25_cache = json.load(f)
+    else:
+        _bm25_cache = []
+    logger.info(f"BM25 缓存加载完毕，共 {len(_bm25_cache)} 条")
+
+_load_cache_from_disk()   # 模块导入时执行
+# ──────────────────────────────────────────────────────────
+
 
 def get_vectorstore() -> Chroma:
     return Chroma(
@@ -36,35 +53,61 @@ def get_vectorstore() -> Chroma:
 
 
 def load_bm25_data() -> list[dict]:
-    if os.path.exists(BM25_PATH):
-        with open(BM25_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return []
+    """直接返回内存缓存，不再读磁盘。"""
+    return _bm25_cache
+
 
 def save_bm25_data(chunks: list[str], metadata: dict = None):
-    existing = load_bm25_data()
+    """写入时去重，同时热更新内存缓存。"""
+    global _bm25_cache
+
+    # 用 (text, source) 做去重键
+    existing_keys = {
+        (d["text"], d.get("source", ""))
+        for d in _bm25_cache
+    }
+
+    new_items = []
     for chunk in chunks:
-        existing.append({
-            "text": chunk,
-            "category": metadata.get("category", "通用") if metadata else "通用",
-            "source": metadata.get("source", "未知") if metadata else "未知"
-        })
+        key = (chunk, metadata.get("source", "未知") if metadata else "未知")
+        if key not in existing_keys:
+            new_items.append({
+                "text": chunk,
+                "category": metadata.get("category", "通用") if metadata else "通用",
+                "source": metadata.get("source", "未知") if metadata else "未知",
+            })
+            existing_keys.add(key)
+
+    if not new_items:
+        logger.info("BM25：所有 chunk 均已存在，跳过写入")
+        return
+
+    _bm25_cache.extend(new_items)          # 热更新内存
     with open(BM25_PATH, "w", encoding="utf-8") as f:
-        json.dump(existing, f, ensure_ascii=False)
+        json.dump(_bm25_cache, f, ensure_ascii=False)
+    logger.info(f"BM25：新增 {len(new_items)} 条，总计 {len(_bm25_cache)} 条")
+
+
+def _tokenize(text: str) -> list[str]:
+    """jieba 精确模式分词，过滤空串。"""
+    return [t for t in jieba.cut(text) if t.strip()]
+
 
 def get_bm25(category: str = None) -> tuple[BM25Okapi | None, list[str]]:
-    data = load_bm25_data()
+    data = _bm25_cache
     if not data:
         return None, []
-    # 按分类过滤
+
     if category:
         filtered = [d for d in data if d.get("category") == category]
         corpus = [d["text"] for d in filtered] if filtered else [d["text"] for d in data]
     else:
         corpus = [d["text"] for d in data]
+
     if not corpus:
         return None, []
-    tokenized = [list(text) for text in corpus]
+
+    tokenized = [_tokenize(text) for text in corpus]   # jieba 分词
     return BM25Okapi(tokenized), corpus
 
 
@@ -75,7 +118,6 @@ def add_documents(texts: list[str], metadatas: list[dict] = None) -> int:
     )
     chunks = splitter.create_documents(texts, metadatas=metadatas)
 
-    # 把父文档的 metadata 复制到每个 chunk
     if metadatas:
         for chunk in chunks:
             if not chunk.metadata:
@@ -123,7 +165,6 @@ def search(query: str, top_k: int = 3, category: str = None) -> list[str]:
 
     all_vec_results = []
     for q in queries:
-        # 向量检索时加分类过滤
         if category:
             results = vectorstore.similarity_search_with_score(
                 q, k=top_k,
@@ -143,10 +184,9 @@ def search(query: str, top_k: int = 3, category: str = None) -> list[str]:
             vec_results.append(r)
     logger.info(f"向量检索（多路去重）：{len(vec_results)} 条")
 
-    # BM25 按分类检索
     bm25, corpus = get_bm25(category=category)
     if bm25 and corpus:
-        tokenized_query = list(query)
+        tokenized_query = _tokenize(query)          # jieba 分词
         bm25_scores = bm25.get_scores(tokenized_query)
         top_indices = sorted(
             range(len(bm25_scores)),
@@ -171,25 +211,22 @@ def search(query: str, top_k: int = 3, category: str = None) -> list[str]:
 
 
 def delete_document(source: str) -> int:
-    """按来源文件名删除所有相关chunk"""
     vectorstore = get_vectorstore()
     results = vectorstore.get(where={"source": source})
     if not results["ids"]:
         return 0
     vectorstore.delete(ids=results["ids"])
 
-    # 同步清理 BM25 数据
-    data = load_bm25_data()
-    filtered = [d for d in data if d.get("source") != source]
+    global _bm25_cache
+    _bm25_cache = [d for d in _bm25_cache if d.get("source") != source]
     with open(BM25_PATH, "w", encoding="utf-8") as f:
-        json.dump(filtered, f, ensure_ascii=False)
+        json.dump(_bm25_cache, f, ensure_ascii=False)
 
     logger.info(f"删除文档：{source}，共 {len(results['ids'])} 个chunk")
     return len(results["ids"])
 
 
 def update_document(source: str, new_text: str, metadata: dict = None) -> int:
-    """更新文档：先删除旧的，再写入新的"""
     delete_document(source)
     if metadata is None:
         metadata = {"source": source, "category": "通用"}
