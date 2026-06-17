@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 CHROMA_PATH = "./chroma_db"
 BM25_PATH = "./bm25_data.json"
-EMBED_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+EMBED_MODEL = "BAAI/bge-small-zh-v1.5"
 
 embeddings = HuggingFaceEmbeddings(model_name=EMBED_MODEL)
 reranker = CrossEncoder("BAAI/bge-reranker-base")
@@ -166,16 +166,36 @@ def rrf_fusion(vec_results: list[str], bm25_results: list[str], k: int = 60) -> 
 
 
 def search(query: str, top_k: int = 3, category: str = None) -> list[str]:
-    # 生成缓存key
-    cache_key = f"rag:{hashlib.md5((query + str(category)).encode()).hexdigest()}"
+    import numpy as np
+    logger.info(f"search函数开始执行，query={query[:20]}")
 
-    # 查缓存
-    cached = redis_client.get(cache_key)
-    if cached:
-        logger.info(f"Redis缓存命中：{query[:20]}")
-        return json.loads(cached)
+    # 把当前问题向量化
+    query_vec = embeddings.embed_query(query)
+    query_vec = np.array(query_vec)
 
-    # 没有缓存，走完整链路
+    # 去Redis查所有缓存的key
+    SIMILARITY_THRESHOLD = 0.85
+    cached_keys = redis_client.keys("rag:vec:*")
+    logger.info(f"Redis中共有{len(cached_keys)}条语义缓存")
+
+    for key in cached_keys:
+        cached_data = redis_client.get(key)
+        if not cached_data:
+            continue
+        data = json.loads(cached_data)
+        cached_vec = np.array(data["vector"])
+
+        # 计算余弦相似度
+        similarity = np.dot(query_vec, cached_vec) / (
+                np.linalg.norm(query_vec) * np.linalg.norm(cached_vec) + 1e-9
+        )
+
+        if similarity >= SIMILARITY_THRESHOLD:
+            logger.info(f"语义缓存命中（相似度{similarity:.3f}）：{query[:20]}")
+            return data["results"]
+        logger.info(f"缓存未命中，相似度{similarity:.3f}")
+
+    # 没命中，走完整检索链路
     queries = generate_queries(query)
     vectorstore = get_vectorstore()
 
@@ -222,9 +242,15 @@ def search(query: str, top_k: int = 3, category: str = None) -> list[str]:
     ranked = sorted(zip(candidates, scores), key=lambda x: x[1], reverse=True)
     results = [text for text, _ in ranked[:top_k]]
 
-    # 存入缓存
-    redis_client.setex(cache_key, CACHE_TTL, json.dumps(results, ensure_ascii=False))
-    logger.info(f"Redis缓存写入：{query[:20]}")
+    # 存入语义缓存：key用MD5，value存向量+结果
+    cache_key = f"rag:vec:{hashlib.md5((query + str(category)).encode()).hexdigest()}"
+    cache_data = {
+        "vector": query_vec.tolist(),
+        "results": results,
+        "query": query,
+    }
+    redis_client.setex(cache_key, CACHE_TTL, json.dumps(cache_data, ensure_ascii=False))
+    logger.info(f"语义缓存写入：{query[:20]}")
 
     return results
 
