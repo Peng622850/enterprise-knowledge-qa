@@ -47,8 +47,10 @@ def add(req: AddDocRequest):
     return {"message": f"成功写入 {count} 个片段"}
 
 
+from fastapi import Form
+
 @app.post("/upload")
-async def upload(file: UploadFile = File(...), category: str = "通用"):
+async def upload(file: UploadFile = File(...), category: str = Form(default="通用")):
     file_bytes = await file.read()
     try:
         text = parse_file(file.filename, file_bytes)
@@ -79,35 +81,47 @@ class QuestionRequest(BaseModel):
 def chat(req: QuestionRequest):
     def stream():
         from agent import save_message, load_history
+        from rag import search
+        from langchain_openai import ChatOpenAI
+        from langchain_core.messages import SystemMessage
+        import os
 
-        # 加载历史记录
+        kb_results = search(req.question)
+        logger.info(f"检索到{len(kb_results)}条结果")
+
         history = load_history(req.session_id)
-        messages = history + [HumanMessage(content=req.question)]
 
-        config = {"configurable": {"thread_id": req.session_id}}
+        llm = ChatOpenAI(
+            model="Qwen/Qwen2.5-72B-Instruct",
+            api_key=os.getenv("SILICONFLOW_API_KEY"),
+            base_url="https://api.siliconflow.cn/v1",
+            temperature=0.3,
+            streaming=True,
+        )
+
+        if kb_results:
+            context = "\n---\n".join(kb_results)
+            user_msg = f"""请根据以下知识库内容回答问题，严格只使用知识库中的信息，不得添加任何知识库没有的内容：
+
+知识库内容：
+{context}
+
+问题：{req.question}"""
+            messages = [HumanMessage(content=user_msg)]
+        else:
+            messages = history + [HumanMessage(content=req.question)]
+
         full_answer = ""
-
-        for chunk, metadata in agent.stream(
-                {"messages": messages},
-                config=config,
-                stream_mode="messages",
-        ):
-            if (
-                    hasattr(chunk, "content")
-                    and chunk.content
-                    and metadata.get("langgraph_node") == "agent"
-                    and not getattr(chunk, "tool_calls", None)
-            ):
+        for chunk in llm.stream(messages):
+            if chunk.content:
                 full_answer += chunk.content
                 yield chunk.content
 
-        # 流式结束后保存对话历史
         if full_answer:
             save_message(req.session_id, "user", req.question)
             save_message(req.session_id, "assistant", full_answer)
 
     return StreamingResponse(stream(), media_type="text/plain")
-
 
 class EvalCase(BaseModel):
     question: str

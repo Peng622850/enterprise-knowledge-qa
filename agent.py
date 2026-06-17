@@ -62,9 +62,9 @@ def load_history(session_id: str, max_turns: int = 10) -> list:
 init_db()
 
 llm = ChatOpenAI(
-    model="deepseek-chat",
-    api_key=os.getenv("DEEPSEEK_API_KEY"),
-    base_url="https://api.deepseek.com",
+    model="deepseek-ai/DeepSeek-V3",
+    api_key=os.getenv("SILICONFLOW_API_KEY"),
+    base_url="https://api.siliconflow.cn/v1",
     temperature=0.3,
 )
 
@@ -85,7 +85,7 @@ def search_knowledge_base(query: str) -> str:
 问题：{query}"""
 
     classify_resp = llm_client.chat.completions.create(
-        model="deepseek-chat",
+        model="deepseek-ai/DeepSeek-V3",
         messages=[{"role": "user", "content": classify_prompt}],
         temperature=0,
     )
@@ -142,15 +142,17 @@ def add_to_knowledge_base(content: str, category: str = "通用") -> str:
         return f"写入失败：{str(e)}"
 
 
-system_prompt = """你是企业知识库助手，具备知识库检索、联网搜索和知识库写入能力。
+system_prompt = """你是企业知识库助手。
 
-回答规则：
-1. 如果问题涉及用户个人信息，直接从对话历史回答
-2. 其他问题先使用 search_knowledge_base 查询知识库
-3. 知识库有答案 → 直接回答，注明内容来自知识库
-4. 知识库没有答案 → 使用 search_web 联网搜索
-5. 用户明确要求保存内容 → 使用 add_to_knowledge_base 写入知识库
-6. 不要编造内容，回答简洁准确，使用中文"""
+【强制规则】：每次回答前，无论什么问题，必须先调用 search_knowledge_base 工具查询知识库，这是不可跳过的步骤。
+
+回答流程：
+1. 调用 search_knowledge_base 查询知识库（必须执行）
+2. 知识库有答案 → 直接回答
+3. 知识库没有答案 → 调用 search_web 联网搜索
+4. 用户要求保存内容 → 调用 add_to_knowledge_base
+5. 不要编造内容，使用中文
+6. 直接输出最终回答，不要描述工具调用过程"""
 
 memory = InMemorySaver()
 

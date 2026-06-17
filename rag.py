@@ -11,6 +11,9 @@ from openai import OpenAI
 from rank_bm25 import BM25Okapi
 from sentence_transformers import CrossEncoder
 
+import redis
+import hashlib
+
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
@@ -24,9 +27,12 @@ embeddings = HuggingFaceEmbeddings(model_name=EMBED_MODEL)
 reranker = CrossEncoder("BAAI/bge-reranker-base")
 
 llm_client = OpenAI(
-    api_key=os.getenv("DEEPSEEK_API_KEY"),
-    base_url="https://api.deepseek.com",
+    api_key=os.getenv("SILICONFLOW_API_KEY"),
+    base_url="https://api.siliconflow.cn/v1",
 )
+
+redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+CACHE_TTL = 3600  # 缓存1小时
 
 # ── BM25 内存缓存 ──────────────────────────────────────────
 _bm25_cache: list[dict] = []   # 全量数据，启动时加载一次
@@ -138,7 +144,7 @@ def generate_queries(question: str) -> list[str]:
 原问题：{question}"""
 
     response = llm_client.chat.completions.create(
-        model="deepseek-chat",
+        model="deepseek-ai/DeepSeek-V3",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7,
     )
@@ -160,6 +166,16 @@ def rrf_fusion(vec_results: list[str], bm25_results: list[str], k: int = 60) -> 
 
 
 def search(query: str, top_k: int = 3, category: str = None) -> list[str]:
+    # 生成缓存key
+    cache_key = f"rag:{hashlib.md5((query + str(category)).encode()).hexdigest()}"
+
+    # 查缓存
+    cached = redis_client.get(cache_key)
+    if cached:
+        logger.info(f"Redis缓存命中：{query[:20]}")
+        return json.loads(cached)
+
+    # 没有缓存，走完整链路
     queries = generate_queries(query)
     vectorstore = get_vectorstore()
 
@@ -182,11 +198,10 @@ def search(query: str, top_k: int = 3, category: str = None) -> list[str]:
         if r not in seen:
             seen.add(r)
             vec_results.append(r)
-    logger.info(f"向量检索（多路去重）：{len(vec_results)} 条")
 
     bm25, corpus = get_bm25(category=category)
     if bm25 and corpus:
-        tokenized_query = _tokenize(query)          # jieba 分词
+        tokenized_query = _tokenize(query)
         bm25_scores = bm25.get_scores(tokenized_query)
         top_indices = sorted(
             range(len(bm25_scores)),
@@ -194,20 +209,24 @@ def search(query: str, top_k: int = 3, category: str = None) -> list[str]:
             reverse=True
         )[:top_k * 2]
         bm25_results = [corpus[i] for i in top_indices if bm25_scores[i] > 0]
-        logger.info(f"BM25 检索：{len(bm25_results)} 条")
     else:
         bm25_results = []
 
     candidates = rrf_fusion(vec_results, bm25_results)[:top_k * 3]
+    logger.info(f"candidates数量：{len(candidates)}，vec:{len(vec_results)}，bm25:{len(bm25_results)}")
     if not candidates:
         return []
 
     pairs = [[query, chunk] for chunk in candidates]
     scores = reranker.predict(pairs)
     ranked = sorted(zip(candidates, scores), key=lambda x: x[1], reverse=True)
-    logger.info(f"Rerank Top-{top_k}：{[(r[:15], round(float(s), 3)) for r, s in ranked[:top_k]]}")
+    results = [text for text, _ in ranked[:top_k]]
 
-    return [text for text, _ in ranked[:top_k]]
+    # 存入缓存
+    redis_client.setex(cache_key, CACHE_TTL, json.dumps(results, ensure_ascii=False))
+    logger.info(f"Redis缓存写入：{query[:20]}")
+
+    return results
 
 
 def delete_document(source: str) -> int:

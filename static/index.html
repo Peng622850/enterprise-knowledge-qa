@@ -4,100 +4,443 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>企业知识库问答系统</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f6fa; color: #333; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    .container { max-width: 900px; margin: 0 auto; padding: 24px; }
+    :root {
+      --bg: #f7f8fc;
+      --surface: #ffffff;
+      --border: #e4e7ef;
+      --accent: #5b6af7;
+      --accent-hover: #4454e8;
+      --accent-light: #eef0fe;
+      --text: #1c1e2b;
+      --text-muted: #8b90a7;
+      --user-bg: #5b6af7;
+      --user-text: #ffffff;
+      --ai-bg: #f0f1f9;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.07), 0 4px 12px rgba(0,0,0,0.04);
+    }
 
-    header { text-align: center; padding: 32px 0 24px; }
-    header h1 { font-size: 24px; font-weight: 600; color: #1a1a2e; }
-    header p { font-size: 14px; color: #888; margin-top: 6px; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
 
-    .card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
-    .card h2 { font-size: 15px; font-weight: 600; margin-bottom: 14px; color: #444; }
+    /* ── Header ── */
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .header-icon {
+      width: 28px; height: 28px;
+      background: var(--accent);
+      border-radius: 7px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+    }
+    .header h1 { font-size: 15px; font-weight: 600; color: var(--text); }
+    .header-sub { font-size: 12px; color: var(--text-muted); margin-left: 4px; }
 
-    /* 上传区域 */
-    .upload-area { border: 2px dashed #d0d7e3; border-radius: 8px; padding: 28px; text-align: center; cursor: pointer; transition: border-color .2s; }
-    .upload-area:hover { border-color: #4f8ef7; }
-    .upload-area input { display: none; }
-    .upload-area p { color: #aaa; font-size: 14px; margin-top: 8px; }
-    .upload-btn { display: inline-block; margin-top: 12px; padding: 8px 20px; background: #4f8ef7; color: #fff; border-radius: 6px; font-size: 14px; cursor: pointer; border: none; }
-    .upload-btn:hover { background: #3a7de0; }
-    .upload-status { margin-top: 10px; font-size: 13px; color: #555; min-height: 20px; }
+    /* ── Layout ── */
+    .layout {
+      display: flex;
+      flex: 1;
+      max-width: 1100px;
+      margin: 0 auto;
+      width: 100%;
+      padding: 20px 16px;
+      gap: 16px;
+      align-items: flex-start;
+    }
 
-    /* 对话区域 */
-    .chat-box { height: 380px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; padding: 16px; background: #fafbfc; margin-bottom: 14px; display: flex; flex-direction: column; gap: 12px; }
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 260px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
 
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 12px 16px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+
+    .panel-body { padding: 14px 16px; }
+
+    /* Upload */
+    .upload-zone {
+      border: 1.5px dashed var(--border);
+      border-radius: var(--radius-sm);
+      padding: 20px 12px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+    .upload-zone:hover { border-color: var(--accent); background: var(--accent-light); }
+    .upload-zone input { display: none; }
+    .upload-icon { font-size: 24px; margin-bottom: 6px; }
+    .upload-label { font-size: 13px; color: var(--text-muted); line-height: 1.4; }
+    .upload-label strong { color: var(--accent); }
+
+    .select-field {
+      width: 100%;
+      margin-top: 10px;
+      padding: 7px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--text);
+      background: var(--surface);
+      outline: none;
+      cursor: pointer;
+    }
+    .select-field:focus { border-color: var(--accent); }
+
+    .upload-status {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--text-muted);
+      min-height: 16px;
+      line-height: 1.4;
+    }
+    .upload-status.ok { color: #2a9d5c; }
+    .upload-status.err { color: #e05c5c; }
+
+    /* Doc list */
+    .doc-list { display: flex; flex-direction: column; gap: 6px; }
+    .doc-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 10px;
+      background: var(--bg);
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--text);
+    }
+    .doc-badge {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--accent-light);
+      color: var(--accent);
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .doc-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .doc-empty { font-size: 12px; color: var(--text-muted); text-align: center; padding: 8px 0; }
+
+    /* ── Chat area ── */
+    .chat-area {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-height: 500px;
+      max-height: calc(100vh - 200px);
+    }
+
+    /* Messages */
     .msg { display: flex; gap: 10px; align-items: flex-start; }
     .msg.user { flex-direction: row-reverse; }
 
-    .avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex-shrink: 0; }
-    .avatar.ai { background: #e8f0fe; color: #4f8ef7; }
-    .avatar.user { background: #e6f9f0; color: #2ecc71; }
+    .avatar {
+      width: 30px; height: 30px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700;
+      flex-shrink: 0;
+    }
+    .avatar.ai { background: var(--accent-light); color: var(--accent); }
+    .avatar.user { background: var(--user-bg); color: #fff; }
 
-    .bubble { max-width: 75%; padding: 10px 14px; border-radius: 10px; font-size: 14px; line-height: 1.7; }
-    .msg.ai .bubble { background: #fff; border: 1px solid #eee; color: #333; }
-    .msg.user .bubble { background: #4f8ef7; color: #fff; }
+    .bubble {
+      max-width: 82%;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    .msg.user .bubble {
+      background: var(--user-bg);
+      color: var(--user-text);
+      border-radius: 10px 2px 10px 10px;
+    }
+    .msg.ai .bubble {
+      background: var(--ai-bg);
+      color: var(--text);
+      border-radius: 2px 10px 10px 10px;
+    }
 
-    .input-row { display: flex; gap: 10px; }
-    .input-row input { flex: 1; padding: 10px 14px; border: 1px solid #dde1ea; border-radius: 8px; font-size: 14px; outline: none; transition: border-color .2s; }
-    .input-row input:focus { border-color: #4f8ef7; }
-    .input-row button { padding: 10px 22px; background: #4f8ef7; color: #fff; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; }
-    .input-row button:hover { background: #3a7de0; }
-    .input-row button:disabled { background: #b0c4f7; cursor: not-allowed; }
+    /* Markdown inside bubble */
+    .bubble h1, .bubble h2, .bubble h3 {
+      font-size: 14px; font-weight: 600;
+      margin: 12px 0 6px;
+      color: var(--text);
+    }
+    .bubble h1:first-child, .bubble h2:first-child, .bubble h3:first-child { margin-top: 0; }
+    .bubble p { margin: 0 0 8px; }
+    .bubble p:last-child { margin-bottom: 0; }
+    .bubble ul, .bubble ol { padding-left: 18px; margin: 6px 0; }
+    .bubble li { margin: 3px 0; }
+    .bubble strong { font-weight: 600; }
+    .bubble em { font-style: italic; }
+    .bubble hr { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
 
-    .thinking { color: #aaa; font-size: 13px; font-style: italic; }
+    .bubble code {
+      font-family: "JetBrains Mono", "Fira Code", "Courier New", monospace;
+      font-size: 12.5px;
+      background: rgba(0,0,0,0.06);
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+    .msg.user .bubble code { background: rgba(255,255,255,0.2); }
+
+    .bubble pre {
+      background: #1e1e2e;
+      border-radius: 8px;
+      padding: 14px;
+      overflow-x: auto;
+      margin: 10px 0;
+    }
+    .bubble pre code {
+      background: none;
+      padding: 0;
+      font-size: 12.5px;
+      color: #cdd6f4;
+    }
+
+    .bubble table {
+      width: 100%; border-collapse: collapse;
+      font-size: 13px; margin: 8px 0;
+    }
+    .bubble th, .bubble td {
+      border: 1px solid var(--border);
+      padding: 6px 10px;
+      text-align: left;
+    }
+    .bubble th { background: var(--bg); font-weight: 600; }
+
+    .bubble blockquote {
+      border-left: 3px solid var(--accent);
+      padding-left: 12px;
+      color: var(--text-muted);
+      margin: 8px 0;
+    }
+
+    /* Typing indicator */
+    .typing-dots {
+      display: flex; gap: 4px; align-items: center;
+      padding: 4px 0;
+    }
+    .typing-dots span {
+      width: 6px; height: 6px;
+      background: var(--text-muted);
+      border-radius: 50%;
+      animation: bounce 1.2s infinite;
+    }
+    .typing-dots span:nth-child(2) { animation-delay: .2s; }
+    .typing-dots span:nth-child(3) { animation-delay: .4s; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: translateY(0); opacity: .4; }
+      40% { transform: translateY(-5px); opacity: 1; }
+    }
+
+    /* Input bar */
+    .chat-input {
+      border-top: 1px solid var(--border);
+      padding: 12px 16px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      background: var(--surface);
+    }
+    .chat-input textarea {
+      flex: 1;
+      padding: 9px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-family: inherit;
+      color: var(--text);
+      background: var(--bg);
+      outline: none;
+      resize: none;
+      line-height: 1.5;
+      max-height: 100px;
+      transition: border-color .15s;
+    }
+    .chat-input textarea:focus { border-color: var(--accent); background: var(--surface); }
+    .chat-input textarea::placeholder { color: var(--text-muted); }
+
+    .send-btn {
+      width: 38px; height: 38px;
+      background: var(--accent);
+      border: none;
+      border-radius: var(--radius-sm);
+      color: #fff;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: background .15s, transform .1s;
+    }
+    .send-btn:hover { background: var(--accent-hover); }
+    .send-btn:active { transform: scale(.95); }
+    .send-btn:disabled { background: #c0c5f0; cursor: not-allowed; transform: none; }
+    .send-btn svg { width: 16px; height: 16px; }
   </style>
 </head>
 <body>
-<div class="container">
-  <header>
-    <h1>📚 企业知识库问答系统</h1>
-    <p>上传文档，智能问答，基于 RAG + Agent 架构</p>
-  </header>
 
-  <!-- 文件上传 -->
-  <div class="card">
-    <h2>📁 上传文档</h2>
-    <div class="upload-area" onclick="document.getElementById('fileInput').click()">
-  <div style="font-size:36px">📄</div>
-  <p>支持 PDF、Word、TXT 格式</p>
-  <select id="categorySelect" onclick="event.stopPropagation()" style="margin-bottom:10px; padding:6px 10px; border:1px solid #dde1ea; border-radius:6px; font-size:14px; width:80%">
-    <option value="通用">通用</option>
-    <option value="人事政策">人事政策</option>
-    <option value="法律法规">法律法规</option>
-    <option value="财务制度">财务制度</option>
-    <option value="技术文档">技术文档</option>
-  </select>
-  <input type="file" id="fileInput" accept=".pdf,.docx,.txt" onchange="uploadFile(this)">
-  <button class="upload-btn" onclick="event.stopPropagation()">选择文件</button>
+<div class="header">
+  <div class="header-icon">📚</div>
+  <h1>企业知识库问答系统</h1>
+  <span class="header-sub">RAG + Agent</span>
 </div>
-    <div class="upload-status" id="uploadStatus"></div>
+
+<div class="layout">
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+
+    <div class="panel">
+      <div class="panel-header">上传文档</div>
+      <div class="panel-body">
+        <div class="upload-zone" onclick="document.getElementById('fileInput').click()">
+          <div class="upload-icon">📄</div>
+          <div class="upload-label">点击上传 <strong>PDF / Word / TXT</strong></div>
+          <input type="file" id="fileInput" accept=".pdf,.docx,.txt" onchange="uploadFile(this)">
+        </div>
+        <select id="categorySelect" class="select-field" onclick="event.stopPropagation()">
+          <option value="通用">通用</option>
+          <option value="人事政策">人事政策</option>
+          <option value="法律法规">法律法规</option>
+          <option value="财务制度">财务制度</option>
+          <option value="技术文档">技术文档</option>
+        </select>
+        <div class="upload-status" id="uploadStatus"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">已上传文档</div>
+      <div class="panel-body">
+        <div class="doc-list" id="docList">
+          <div class="doc-empty">暂无文档</div>
+        </div>
+      </div>
+    </div>
+
   </div>
 
-  <!-- 问答对话 -->
-  <div class="card">
-    <h2>💬 智能问答</h2>
-    <div class="chat-box" id="chatBox">
+  <!-- Chat -->
+  <div class="chat-area">
+    <div class="chat-messages" id="chatMessages">
       <div class="msg ai">
         <div class="avatar ai">AI</div>
         <div class="bubble">你好！请先上传文档，然后就可以向我提问了。我会根据知识库内容为你解答。</div>
       </div>
     </div>
-    <div class="input-row">
-      <input type="text" id="questionInput" placeholder="输入问题，按 Enter 发送..." onkeydown="if(event.key==='Enter') sendQuestion()">
-      <button id="sendBtn" onclick="sendQuestion()">发送</button>
+    <div class="chat-input">
+      <textarea
+        id="questionInput"
+        placeholder="输入问题，Enter 发送，Shift+Enter 换行…"
+        rows="1"
+        onkeydown="handleKey(event)"
+        oninput="autoResize(this)"
+      ></textarea>
+      <button class="send-btn" id="sendBtn" onclick="sendQuestion()" title="发送">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13"></line>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+        </svg>
+      </button>
     </div>
   </div>
+
 </div>
 
 <script>
+  // ── marked 配置 ──
+  marked.setOptions({ breaks: true, gfm: true });
+  const renderer = new marked.Renderer();
+  renderer.code = (code, lang) => {
+    const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+    const highlighted = hljs.highlight(typeof code === 'object' ? code.text : code, { language }).value;
+    return `<pre><code class="hljs language-${language}">${highlighted}</code></pre>`;
+  };
+  marked.use({ renderer });
+
+  // ── 文档列表 ──
+  const uploadedDocs = [];
+
+  function renderDocList() {
+    const list = document.getElementById('docList');
+    if (!uploadedDocs.length) {
+      list.innerHTML = '<div class="doc-empty">暂无文档</div>';
+      return;
+    }
+    list.innerHTML = uploadedDocs.map(d => `
+      <div class="doc-item">
+        <span class="doc-badge">${d.category}</span>
+        <span class="doc-name" title="${d.name}">${d.name}</span>
+      </div>
+    `).join('');
+  }
+
+  // ── 上传 ──
   async function uploadFile(input) {
     const file = input.files[0];
     if (!file) return;
     const status = document.getElementById('uploadStatus');
-    status.textContent = `正在上传 ${file.name}...`;
+    status.className = 'upload-status';
+    status.textContent = `上传中…`;
 
     const formData = new FormData();
     formData.append('file', file);
@@ -105,19 +448,54 @@
     formData.append('category', category);
 
     try {
-        const res = await fetch('/upload', { method: 'POST', body: formData });
-        const data = await res.json();
-        if (data.error) {
-            status.textContent = `❌ ${data.error}`;
-        } else {
-            status.textContent = `✅ ${data.message}，分类：${data.category}，共切分 ${data.chunks} 个片段`;
-        }
-    } catch (e) {
-        status.textContent = '❌ 上传失败，请检查服务是否启动';
+      const res = await fetch('/upload', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.error) {
+        status.className = 'upload-status err';
+        status.textContent = `✗ ${data.error}`;
+      } else {
+        status.className = 'upload-status ok';
+        status.textContent = `✓ ${data.chunks} 个片段已导入`;
+        uploadedDocs.push({ name: file.name, category });
+        renderDocList();
+      }
+    } catch {
+      status.className = 'upload-status err';
+      status.textContent = '✗ 上传失败，请检查服务';
     }
-}
+    input.value = '';
+  }
 
-async function sendQuestion() {
+  // ── 自动调整textarea高度 ──
+  function autoResize(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+  }
+
+  function handleKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendQuestion();
+    }
+  }
+
+  // ── 追加消息 ──
+  function appendMsg(role, html, isMarkdown = false) {
+    const box = document.getElementById('chatMessages');
+    const div = document.createElement('div');
+    div.className = `msg ${role}`;
+    const content = isMarkdown ? marked.parse(html) : html;
+    div.innerHTML = `
+      <div class="avatar ${role}">${role === 'user' ? '我' : 'AI'}</div>
+      <div class="bubble">${content}</div>
+    `;
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+    return div.querySelector('.bubble');
+  }
+
+  // ── 发送问题 ──
+  async function sendQuestion() {
     const input = document.getElementById('questionInput');
     const question = input.value.trim();
     if (!question) return;
@@ -125,54 +503,64 @@ async function sendQuestion() {
     const btn = document.getElementById('sendBtn');
     btn.disabled = true;
     input.value = '';
+    input.style.height = 'auto';
 
     appendMsg('user', question);
-    const aiDiv = appendMsg('ai', '');
-    const bubble = aiDiv.querySelector('.bubble');
+
+    // 打字动画占位
+    const box = document.getElementById('chatMessages');
+    const typingDiv = document.createElement('div');
+    typingDiv.className = 'msg ai';
+    typingDiv.innerHTML = `
+      <div class="avatar ai">AI</div>
+      <div class="bubble"><div class="typing-dots"><span></span><span></span><span></span></div></div>
+    `;
+    box.appendChild(typingDiv);
+    box.scrollTop = box.scrollHeight;
 
     try {
-        const res = await fetch('/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ question, session_id: 'default' })
-        });
+      const res = await fetch('/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question, session_id: 'default' })
+      });
 
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let full = '';
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let full = '';
+      let started = false;
+      let aiBubble = null;
 
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            const text = decoder.decode(value);
-            full += text;
-            bubble.textContent = full;
-            document.getElementById('chatBox').scrollTop =
-                document.getElementById('chatBox').scrollHeight;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        full += decoder.decode(value);
+
+        if (!started) {
+          // 第一个chunk到了，移除打字动画，创建真实气泡
+          typingDiv.remove();
+          aiBubble = appendMsg('ai', '');
+          started = true;
         }
 
-        if (!full) bubble.textContent = '未获取到回答，请重试';
+        // 流式渲染Markdown
+        aiBubble.innerHTML = marked.parse(full);
+        box.scrollTop = box.scrollHeight;
+      }
 
-    } catch (e) {
-        bubble.textContent = '请求失败，请检查服务是否启动';
+      if (!started) {
+        typingDiv.remove();
+        appendMsg('ai', '未获取到回答，请重试。');
+      }
+
+    } catch {
+      typingDiv.remove();
+      appendMsg('ai', '请求失败，请检查服务是否启动。');
     }
 
     btn.disabled = false;
     input.focus();
-}
-
-function appendMsg(role, text, thinking = false) {
-    const chatBox = document.getElementById('chatBox');
-    const div = document.createElement('div');
-    div.className = `msg ${role === 'user' ? 'user' : 'ai'}`;
-    div.innerHTML = `
-        <div class="avatar ${role === 'user' ? 'user' : 'ai'}">${role === 'user' ? '我' : 'AI'}</div>
-        <div class="bubble ${thinking ? 'thinking' : ''}">${text}</div>
-    `;
-    chatBox.appendChild(div);
-    chatBox.scrollTop = chatBox.scrollHeight;
-    return div;
-}
+  }
 </script>
 </body>
 </html>

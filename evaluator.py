@@ -11,8 +11,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 client = OpenAI(
-    api_key=os.getenv("DEEPSEEK_API_KEY"),
-    base_url="https://api.deepseek.com",
+    api_key=os.getenv("SILICONFLOW_API_KEY"),
+    base_url="https://api.siliconflow.cn/v1",
 )
 
 
@@ -58,7 +58,7 @@ def evaluate_answer(question: str, answer: str, contexts: list[str]) -> EvalResu
 }}"""
 
     response = client.chat.completions.create(
-        model="deepseek-chat",
+        model="deepseek-ai/DeepSeek-V3",
         messages=[{"role": "user", "content": prompt}],
         temperature=0,
     )

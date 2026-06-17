@@ -101,7 +101,7 @@ def generate_answer(question: str, contexts: list[str]) -> str:
 请给出准确、完整的回答："""
 
     response = llm_client.chat.completions.create(
-        model="deepseek-chat",
+        model="deepseek-ai/DeepSeek-V3",
         messages=[{"role": "user", "content": prompt}],
         temperature=0,
     )
