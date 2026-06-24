@@ -1,21 +1,23 @@
-import logging
-import os
 import sqlite3
+import os
+
 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
-from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.prebuilt import create_react_agent
 from tavily import TavilyClient
 
 from rag import search, add_documents, llm_client
 
+from retry_utils import llm_retry
+
+
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from logger_setup import get_logger
+logger = get_logger(__name__)
 
 DB_PATH = "./chat_history.db"
 
@@ -70,6 +72,14 @@ llm = ChatOpenAI(
 
 tavily = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
 
+@llm_retry
+def _call_llm_classify(prompt: str) -> str:
+    classify_resp = llm_client.chat.completions.create(
+        model="deepseek-ai/DeepSeek-V3",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0,
+    )
+    return classify_resp.choices[0].message.content.strip()
 
 @tool
 def search_knowledge_base(query: str) -> str:
@@ -77,26 +87,23 @@ def search_knowledge_base(query: str) -> str:
     在企业知识库中搜索相关信息。
     当用户询问公司内部政策、规章制度、上传文档中的内容时使用此工具。
     """
-    # 内部自动判断分类，不依赖Agent决策
     classify_prompt = f"""判断以下问题最匹配哪个分类，只输出分类名称，不要解释。
 
 可选分类：人事政策、法律法规、财务制度、技术文档、通用
 
 问题：{query}"""
 
-    classify_resp = llm_client.chat.completions.create(
-        model="deepseek-ai/DeepSeek-V3",
-        messages=[{"role": "user", "content": classify_prompt}],
-        temperature=0,
-    )
-    category = classify_resp.choices[0].message.content.strip()
-    logger.info(f"自动分类结果：{category}")
+    try:
+        category = _call_llm_classify(classify_prompt)
+        logger.info(f"自动分类结果：{category}")
+    except Exception as e:
+        logger.error(f"分类失败，降级为全库搜索：{e}")
+        category = None
 
     results = search(query, category=category)
 
-    # 如果分类检索没结果，fallback到全库搜索
     if not results:
-        logger.info(f"分类检索无结果，fallback到全库搜索")
+        logger.info("分类检索无结果，fallback到全库搜索")
         results = search(query)
 
     if not results:
@@ -154,7 +161,10 @@ system_prompt = """你是企业知识库助手。
 5. 不要编造内容，使用中文
 6. 直接输出最终回答，不要描述工具调用过程"""
 
-memory = InMemorySaver()
+
+from langgraph.checkpoint.memory import MemorySaver
+
+memory = MemorySaver()
 
 agent = create_react_agent(
     model=llm,
@@ -164,10 +174,10 @@ agent = create_react_agent(
 )
 
 
-def run_agent(question: str, session_id: str = "default") -> str:
+def run_agent(question: str, session_id: str = "default", tenant_id: str = "default") -> str:
     logger.info(f"用户提问：{question}")
 
-    config = {"configurable": {"thread_id": session_id}}
+    config = {"configurable": {"thread_id": f"{tenant_id}:{session_id}"}}
     result = agent.invoke(
         {"messages": [HumanMessage(content=question)]},   # 只传当前问题
         config=config,
@@ -175,8 +185,6 @@ def run_agent(question: str, session_id: str = "default") -> str:
     answer = result["messages"][-1].content
 
     # SQLite 仅做持久化存档，不再参与 LangGraph 输入
-    save_message(session_id, "user", question)
-    save_message(session_id, "assistant", answer)
 
     logger.info(f"Agent 回答：{answer[:50]}...")
     return answer

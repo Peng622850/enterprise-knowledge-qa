@@ -1,5 +1,4 @@
 import json
-import logging
 import os
 
 import jieba
@@ -10,14 +9,15 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from openai import OpenAI
 from rank_bm25 import BM25Okapi
 from sentence_transformers import CrossEncoder
+from retry_utils import llm_retry
 
 import redis
 import hashlib
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from logger_setup import get_logger
+logger = get_logger(__name__)
 
 CHROMA_PATH = "./chroma_db"
 BM25_PATH = "./bm25_data.json"
@@ -51,8 +51,10 @@ _load_cache_from_disk()   # 模块导入时执行
 # ──────────────────────────────────────────────────────────
 
 
-def get_vectorstore() -> Chroma:
+def get_vectorstore(tenant_id: str = "default") -> Chroma:
+    collection_name = f"tenant_{tenant_id}"
     return Chroma(
+        collection_name=collection_name,
         persist_directory=CHROMA_PATH,
         embedding_function=embeddings,
     )
@@ -117,7 +119,7 @@ def get_bm25(category: str = None) -> tuple[BM25Okapi | None, list[str]]:
     return BM25Okapi(tokenized), corpus
 
 
-def add_documents(texts: list[str], metadatas: list[dict] = None) -> int:
+def add_documents(texts: list[str], metadatas: list[dict] = None, tenant_id: str = "default") -> int:
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=500,
         chunk_overlap=100,
@@ -130,29 +132,36 @@ def add_documents(texts: list[str], metadatas: list[dict] = None) -> int:
                 chunk.metadata = metadatas[0]
 
     chunk_texts = [c.page_content for c in chunks]
-    vectorstore = get_vectorstore()
+    vectorstore = get_vectorstore(tenant_id)
     vectorstore.add_documents(chunks)
     save_bm25_data(chunk_texts, metadatas[0] if metadatas else {})
     logger.info(f"写入 {len(chunks)} 个 chunk，分类：{metadatas[0].get('category') if metadatas else '未知'}")
     return len(chunks)
 
 
-def generate_queries(question: str) -> list[str]:
-    prompt = f"""请将以下问题改写成3个不同的表达方式，用于检索知识库。
-要求：每行一个问题，只输出问题本身，不要编号，不要解释。
-
-原问题：{question}"""
-
+@llm_retry
+def _call_llm_generate_queries(prompt: str) -> str:
     response = llm_client.chat.completions.create(
         model="deepseek-ai/DeepSeek-V3",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7,
     )
-    raw = response.choices[0].message.content.strip()
-    queries = [q.strip() for q in raw.split("\n") if q.strip()]
-    all_queries = [question] + queries[:3]
-    logger.info(f"MultiQuery 改写：{all_queries}")
-    return all_queries
+    return response.choices[0].message.content.strip()
+
+def generate_queries(question: str) -> list[str]:
+    prompt = f"""请将以下问题改写成3个不同的表达方式，用于检索知识库。
+要求：每行一个问题，只输出问题本身，不要编号，不要解释。
+
+原问题：{question}"""
+    try:
+        raw = _call_llm_generate_queries(prompt)
+        queries = [q.strip() for q in raw.split("\n") if q.strip()]
+        all_queries = [question] + queries[:3]
+        logger.info(f"MultiQuery 改写：{all_queries}")
+        return all_queries
+    except Exception as e:
+        logger.error(f"MultiQuery 失败，降级为单查询：{e}")
+        return [question]  # fallback：降级为原始问题
 
 
 def rrf_fusion(vec_results: list[str], bm25_results: list[str], k: int = 60) -> list[str]:
@@ -165,7 +174,7 @@ def rrf_fusion(vec_results: list[str], bm25_results: list[str], k: int = 60) -> 
     return [text for text, _ in sorted_results]
 
 
-def search(query: str, top_k: int = 3, category: str = None) -> list[str]:
+def search(query: str, top_k: int = 3, category: str = None, tenant_id: str = "default") -> list[str]:
     import numpy as np
     logger.info(f"search函数开始执行，query={query[:20]}")
 
@@ -175,7 +184,13 @@ def search(query: str, top_k: int = 3, category: str = None) -> list[str]:
 
     # 去Redis查所有缓存的key
     SIMILARITY_THRESHOLD = 0.85
-    cached_keys = redis_client.keys("rag:vec:*")
+    cached_keys = []
+    cursor = 0
+    while True:
+        cursor, keys = redis_client.scan(cursor, match="rag:vec:*", count=100)
+        cached_keys.extend(keys)
+        if cursor == 0:
+            break
     logger.info(f"Redis中共有{len(cached_keys)}条语义缓存")
 
     for key in cached_keys:
@@ -197,7 +212,7 @@ def search(query: str, top_k: int = 3, category: str = None) -> list[str]:
 
     # 没命中，走完整检索链路
     queries = generate_queries(query)
-    vectorstore = get_vectorstore()
+    vectorstore = get_vectorstore(tenant_id)
 
     all_vec_results = []
     for q in queries:
@@ -255,8 +270,8 @@ def search(query: str, top_k: int = 3, category: str = None) -> list[str]:
     return results
 
 
-def delete_document(source: str) -> int:
-    vectorstore = get_vectorstore()
+def delete_document(source: str,tenant_id: str = "default") -> int:
+    vectorstore = get_vectorstore(tenant_id)
     results = vectorstore.get(where={"source": source})
     if not results["ids"]:
         return 0
@@ -271,8 +286,8 @@ def delete_document(source: str) -> int:
     return len(results["ids"])
 
 
-def update_document(source: str, new_text: str, metadata: dict = None) -> int:
-    delete_document(source)
+def update_document(source: str, new_text: str, metadata: dict = None, tenant_id: str = "default") -> int:
+    delete_document(source, tenant_id=tenant_id)
     if metadata is None:
         metadata = {"source": source, "category": "通用"}
-    return add_documents(texts=[new_text], metadatas=[metadata])
+    return add_documents(texts=[new_text], metadatas=[metadata], tenant_id=tenant_id)

@@ -1,4 +1,4 @@
-import logging
+
 import os
 from dataclasses import dataclass
 
@@ -7,8 +7,8 @@ from openai import OpenAI
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from logger_setup import get_logger
+logger = get_logger(__name__)
 
 client = OpenAI(
     api_key=os.getenv("SILICONFLOW_API_KEY"),
